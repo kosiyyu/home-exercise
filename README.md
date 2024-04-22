@@ -14,14 +14,18 @@ npm install
 
 ## Running the Project
 
-To run the project entery, use the following command:
-
-```
-npm start
-```
-
 To run any ts file in the project, use the following command:
 
 ```
 ts-node --transpile-only <filename>.ts
+```
+
+To run function with example file:
+```
+npm run -s entry
+```
+
+To run function tests:
+```
+npm run test
 ```

@@ -1,15 +1,35 @@
 import fs from 'fs';
 
-type IMRolePolicy = {
-    PolicyName: string;
-    PolicyDocument: object;
+type Statement = {
+    Effect: "Allow" | "Deny";
+    Action: string | string[];
+    Resource: string;
+
+    Sid?: string;
+    Principal?: Record<string, string[]>;
+    NotPrincipal?: Record<string, string[]>;
+    NoAction?: string;
+    NoResource?: string[];
+    Condition?: unknown;
 }
 
-const pattern = new RegExp("[\\w+=,.@-]+");
+type PolicyDocument = {
+    Version: "2008-10-17" | "2012-10-17";
+    Statement: Statement | Statement[];
+}
+
+export type IMRolePolicy = {
+    PolicyName: string;
+    PolicyDocument: PolicyDocument;
+}
+
+const pattern = /^[\w+=,.@-]+$/;
+
+const filePath = './files/IMRolePolicy.json';
 
 const loadFile = (): string | undefined => {
     try {
-        return fs.readFileSync('./files/IMRolePolicy.json', 'utf8');
+        return fs.readFileSync(filePath, 'utf8');
     } catch (e) {
         console.error("Error while loading file:", e);
         return undefined;
@@ -18,23 +38,53 @@ const loadFile = (): string | undefined => {
 
 const json = loadFile();
 
-// https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-iam-role-policy.html
-const validateIMRolePolicy = (json: string | undefined): boolean => {
+export const validateIMRolePolicy = (json: string | undefined): boolean => {
     if (typeof json !== 'string') {
         return false;
     }
     try {
         const policy = JSON.parse(json) as IMRolePolicy;
-        if (typeof policy.PolicyName !== 'string' &&
-            ((policy.PolicyName >= 1 && policy.PolicyName <= 128) ||
-                pattern.test(policy.PolicyName))
-        ) {
+        if (typeof policy.PolicyName !== 'string' ||
+            !(policy.PolicyName.length >= 1 && policy.PolicyName.length <= 128) ||
+            !pattern.test(policy.PolicyName)) {
             return false;
         }
-        // https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_grammar.html
-        // todo
-        if (typeof policy.PolicyDocument !== 'object') {
+
+        if (typeof policy.PolicyDocument !== 'object' ||
+            !['2008-10-17', '2012-10-17'].includes(policy.PolicyDocument.Version) ||
+            !(Array.isArray(policy.PolicyDocument.Statement) || typeof policy.PolicyDocument.Statement === 'object')) {
             return false;
+        }
+
+        const statements = Array.isArray(policy.PolicyDocument.Statement) ? policy.PolicyDocument.Statement : [policy.PolicyDocument.Statement];
+        for (const statement of statements) {
+            if (!['Allow', 'Deny'].includes(statement.Effect) ||
+                !(typeof statement.Action === 'string' || Array.isArray(statement.Action))) {
+                return false;
+            }
+            // check for single asterisk
+            if (typeof statement.Resource !== 'string') {
+                return false;
+            } else {
+                if (statement.Resource === '*') return false
+            }
+
+            if (statement.Sid && typeof statement.Sid !== 'string') {
+                return false;
+            }
+            if (statement.Principal && typeof statement.Principal !== 'object') {
+                return false;
+            }
+            if (statement.NotPrincipal && typeof statement.NotPrincipal !== 'object') {
+                return false;
+            }
+            if (statement.NoAction && typeof statement.NoAction !== 'string') {
+                return false;
+            }
+            if (statement.NoResource && !Array.isArray(statement.NoResource)) {
+                return false;
+            }
+
         }
     } catch (e) {
         console.log(e);
